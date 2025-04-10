@@ -2,13 +2,28 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { AlertCircle, CheckCircle, FileText, Upload } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  AlertCircle,
+  CheckCircle,
+  FileText,
+  Upload,
+  File,
+  Trash2,
+  Download,
+  Plus,
+  X,
+  Calendar
+} from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 // Replace with your secure keys - these would normally be environment variables
 const OCR_API_KEY = "K89469803888957"
@@ -27,12 +42,31 @@ interface TextSegment {
   text: string
 }
 
-export default function ShortNotes() {
+interface DocumentItem {
+  _id: string
+  title: string
+  fileName: string
+  fileType: string
+  filePath: string
+  fileSize: number
+  uploadDate: string
+  description: string
+}
+
+export default function Notes() {
   const [file, setFile] = useState<File | null>(null)
   const [notesData, setNotesData] = useState<NoteItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [documentTitle, setDocumentTitle] = useState("")
+  const [documentDescription, setDocumentDescription] = useState("")
+  const [documentFile, setDocumentFile] = useState<File | null>(null)
+  const [isDocumentUploading, setIsDocumentUploading] = useState(false)
+  const [documentError, setDocumentError] = useState("")
+  const [activeTab, setActiveTab] = useState("short-notes")
 
   // Function to parse Gemini response
   function parseGeminiResponse(text: string): NoteItem[] {
@@ -241,107 +275,382 @@ export default function ShortNotes() {
     )
   }
 
+  // Load teacher documents on component mount
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        const teacherData = localStorage.getItem("teacherData")
+        if (!teacherData) return
+
+        const { Id: teacherId } = JSON.parse(teacherData)
+
+        const response = await fetch(`/api/notes/document?teacherId=${teacherId}`)
+        const data = await response.json()
+
+        if (data.success) {
+          setDocuments(data.documents)
+        }
+      } catch (error) {
+        console.error("Error fetching documents:", error)
+      }
+    }
+
+    fetchDocuments()
+  }, [])
+
+  // Handle document file change
+  const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setDocumentFile(e.target.files[0])
+      setDocumentError("")
+    }
+  }
+
+  // Upload a new document
+  const handleDocumentUpload = async () => {
+    if (!documentFile) {
+      setDocumentError("Please select a file to upload.")
+      return
+    }
+
+    try {
+      setIsDocumentUploading(true)
+      setDocumentError("")
+
+      const teacherData = localStorage.getItem("teacherData")
+      if (!teacherData) {
+        setDocumentError("No teacher data found. Please log in again.")
+        return
+      }
+
+      const { Id: teacherId } = JSON.parse(teacherData)
+
+      const formData = new FormData()
+      formData.append("file", documentFile)
+      formData.append("teacherId", teacherId.toString())
+      formData.append("title", documentTitle || documentFile.name)
+      formData.append("description", documentDescription)
+
+      const response = await fetch("/api/notes/document", {
+        method: "POST",
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Refresh document list
+        const docsResponse = await fetch(`/api/notes/document?teacherId=${teacherId}`)
+        const docsData = await docsResponse.json()
+
+        if (docsData.success) {
+          setDocuments(docsData.documents)
+        }
+
+        // Close dialog and reset form
+        setUploadDialogOpen(false)
+        setDocumentTitle("")
+        setDocumentDescription("")
+        setDocumentFile(null)
+      } else {
+        setDocumentError(data.message || "Failed to upload document")
+      }
+    } catch (error) {
+      console.error("Error uploading document:", error)
+      setDocumentError("An error occurred during upload")
+    } finally {
+      setIsDocumentUploading(false)
+    }
+  }
+
+  // Delete a document
+  const handleDocumentDelete = async (documentId: string) => {
+    try {
+      const response = await fetch(`/api/notes/document/${documentId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Update document list
+        setDocuments(documents.filter(doc => doc._id !== documentId))
+      }
+    } catch (error) {
+      console.error("Error deleting document:", error)
+    }
+  }
+
+  // Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 animate-fade-in">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center mb-6">
           <FileText className="h-6 w-6 mr-2 text-blue-600" />
-          <h1 className="text-2xl font-bold">Generate Short Notes</h1>
+          <h1 className="text-2xl font-bold">Teacher Notes</h1>
         </div>
 
-        <p className="text-muted-foreground mb-8">
-          Upload a PDF document to extract text and generate short, concise notes. The system extracts the text from the
-          document, sends it to Gemini for summarization, and then displays the results.
-        </p>
+        <Tabs defaultValue={activeTab} className="w-full" onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="short-notes">Short Notes Generator</TabsTrigger>
+            <TabsTrigger value="documents">Document Repository</TabsTrigger>
+          </TabsList>
 
-        <Card className="mb-8 hover-card">
-          <CardHeader>
-            <CardTitle>Upload Document</CardTitle>
-            <CardDescription>Select a PDF file to generate notes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid w-full max-w-sm items-center gap-1.5">
-                <Input
-                  id="pdf-upload"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileChange}
-                  className="cursor-pointer"
-                />
-                <p className="text-sm text-muted-foreground">{file ? `Selected: ${file.name}` : "No file selected"}</p>
-              </div>
+          <TabsContent value="short-notes">
+            <p className="text-muted-foreground mb-8">
+              Upload a PDF document to extract text and generate short, concise notes. The system extracts the text from the
+              document, sends it to Gemini for summarization, and then displays the results.
+            </p>
 
-              <Button type="submit" disabled={isLoading || !file} className="bg-gradient-blue hover:opacity-90">
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
-                    Generating Notes...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Generate Short Notes
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+            <Card className="mb-8 hover-card">
+              <CardHeader>
+                <CardTitle>Upload Document</CardTitle>
+                <CardDescription>Select a PDF file to generate notes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid w-full max-w-sm items-center gap-1.5">
+                    <Input
+                      id="pdf-upload"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleFileChange}
+                      className="cursor-pointer"
+                    />
+                    <p className="text-sm text-muted-foreground">{file ? `Selected: ${file.name}` : "No file selected"}</p>
+                  </div>
 
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+                  <Button type="submit" disabled={isLoading || !file} className="bg-gradient-blue hover:opacity-90">
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+                        Generating Notes...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Generate Short Notes
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
 
-        {success && (
-          <Alert className="mb-6 bg-green-50 text-green-800 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        )}
+            {error && (
+              <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-        {/* Render the generated notes */}
-        {notesData.length > 0 && (
-          <Card className="mb-8 animate-slide-up">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FileText className="h-5 w-5 mr-2 text-blue-600" />
-                Generated Notes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Separator className="mb-4" />
-              <div className="space-y-4">
-                {notesData.map((item, index) => {
-                  if (item.type === "section") {
-                    return (
-                      <div key={index} className="mt-3 mb-2">
-                        {item.bullet && <span className="mr-1">•</span>}
-                        <strong>{item.key}:</strong> <span>{renderFormattedContent(item.value)}</span>
+            {success && (
+              <Alert className="mb-6 bg-green-50 text-green-800 border-green-200">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Render the generated notes */}
+            {notesData.length > 0 && (
+              <Card className="mb-8 animate-slide-up">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                    Generated Notes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Separator className="mb-4" />
+                  <div className="space-y-4">
+                    {notesData.map((item, index) => {
+                      if (item.type === "section") {
+                        return (
+                          <div key={index} className="mt-3 mb-2">
+                            {item.bullet && <span className="mr-1">•</span>}
+                            <strong>{item.key}:</strong> <span>{renderFormattedContent(item.value)}</span>
+                          </div>
+                        )
+                      }
+                      if (item.type === "bullet-point") {
+                        return (
+                          <div key={index} className="pl-4 flex">
+                            <span className="mr-2">•</span>
+                            <span>{renderFormattedContent(item.value)}</span>
+                          </div>
+                        )
+                      }
+                      return (
+                        <p key={index} className="text-muted-foreground">
+                          {renderFormattedContent(item.value)}
+                        </p>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="documents">
+            <div className="flex justify-between items-center mb-6">
+              <p className="text-muted-foreground">
+                Upload and manage documents for your notes and teaching materials.
+              </p>
+
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Upload Document
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Upload New Document</DialogTitle>
+                    <DialogDescription>
+                      Add a new document to your repository. Files can be any format.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="title">Document Title</Label>
+                      <Input
+                        id="title"
+                        value={documentTitle}
+                        onChange={(e) => setDocumentTitle(e.target.value)}
+                        placeholder="Enter document title"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Description (optional)</Label>
+                      <Textarea
+                        id="description"
+                        value={documentDescription}
+                        onChange={(e) => setDocumentDescription(e.target.value)}
+                        placeholder="Enter document description"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="document-file">File</Label>
+                      <Input
+                        id="document-file"
+                        type="file"
+                        onChange={handleDocumentFileChange}
+                        className="cursor-pointer"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {documentFile ? `Selected: ${documentFile.name}` : "No file selected"}
+                      </p>
+                    </div>
+
+                    {documentError && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{documentError}</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setUploadDialogOpen(false)}
+                      disabled={isDocumentUploading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleDocumentUpload}
+                      disabled={isDocumentUploading}
+                    >
+                      {isDocumentUploading ? (
+                        <>
+                          <div className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+                          Uploading...
+                        </>
+                      ) : "Upload Document"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {documents.length === 0 ? (
+              <Card className="mb-6">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <File className="h-16 w-16 text-muted-foreground opacity-30 mb-4" />
+                  <p className="text-lg font-medium text-center">No documents yet</p>
+                  <p className="text-sm text-muted-foreground text-center mt-2">
+                    Upload your first document to start building your repository.
+                  </p>
+                  <Button
+                    className="mt-6"
+                    onClick={() => setUploadDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Upload Document
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4">
+                {documents.map((doc) => (
+                  <Card key={doc._id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between">
+                        <div className="flex flex-col overflow-hidden">
+                          <p className="font-medium truncate">{doc.title}</p>
+                          <p className="text-sm text-muted-foreground truncate">{doc.fileName}</p>
+                          <div className="flex items-center text-xs text-muted-foreground mt-1 space-x-3">
+                            <span className="flex items-center">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              {new Date(doc.uploadDate).toLocaleDateString()}
+                            </span>
+                            <span>{formatFileSize(doc.fileSize)}</span>
+                          </div>
+                          {doc.description && (
+                            <p className="text-sm mt-2">{doc.description}</p>
+                          )}
+                        </div>
+
+                        <div className="flex space-x-2 ml-4">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleDocumentDelete(doc._id)}
+                            title="Delete document"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => window.open(doc.filePath, '_blank')}
+                            title="Download document"
+                          >
+                            <Download className="h-4 w-4 text-primary" />
+                          </Button>
+                        </div>
                       </div>
-                    )
-                  }
-                  if (item.type === "bullet-point") {
-                    return (
-                      <div key={index} className="pl-4 flex">
-                        <span className="mr-2">•</span>
-                        <span>{renderFormattedContent(item.value)}</span>
-                      </div>
-                    )
-                  }
-                  return (
-                    <p key={index} className="text-muted-foreground">
-                      {renderFormattedContent(item.value)}
-                    </p>
-                  )
-                })}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )
