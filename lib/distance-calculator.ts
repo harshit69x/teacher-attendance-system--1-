@@ -1,16 +1,27 @@
 // Haversine formula to calculate distance between two points on Earth
-export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371e3 // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180 // φ, λ in radians
-  const φ2 = (lat2 * Math.PI) / 180
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180
+export function calculateDistance(
+  userLat: number,
+  userLng: number,
+  collegeLat: number,
+  collegeLng: number,
+) {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  const earthRadius = 6371000; // Earth's radius in meters
+  const dLat = toRadians(collegeLat - userLat);
+  const dLng = toRadians(collegeLng - userLng);
 
-  const distanceInMeters = R * c
-  const isWithinRange = distanceInMeters <= 500 // Within 500 meters
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(userLat)) *
+      Math.cos(toRadians(collegeLat)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
 
-  return { distanceInMeters, isWithinRange }
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distanceInMeters = earthRadius * c;
+
+  const isWithinRange = distanceInMeters <= 500; // 500 meters range
+
+  return { distanceInMeters, isWithinRange };
 }

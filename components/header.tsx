@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { LogOut, Menu, Home, Calendar, BarChart, FileText, Bell } from "lucide-react"
+import { LogOut, Menu, Home, Calendar, BarChart, FileText, Bell, Star } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 
@@ -47,6 +47,7 @@ export default function Header() {
     { name: "Dashboard", href: "/dashboard", icon: <Home className="h-4 w-4 mr-2" /> },
     { name: "Schedule", href: "/schedule", icon: <Calendar className="h-4 w-4 mr-2" /> },
     { name: "Statistics", href: "/statistics", icon: <BarChart className="h-4 w-4 mr-2" /> },
+    { name: "Important Dates", href: "/important-dates", icon: <Star className="h-4 w-4 mr-2" /> },
     { name: "Short Notes", href: "/notes", icon: <FileText className="h-4 w-4 mr-2" /> },
   ]
 
@@ -83,6 +84,9 @@ export default function Header() {
                 {item.icon}
                 {item.name}
                 {item.name === "Short Notes" && <Badge className="ml-2 bg-green-500 hover:bg-green-600">New</Badge>}
+                {item.name === "Important Dates" && (
+                  <Badge className="ml-2 bg-yellow-500 hover:bg-yellow-600">New</Badge>
+                )}
               </Link>
             ))}
             <Button
@@ -128,6 +132,9 @@ export default function Header() {
                         {item.name}
                         {item.name === "Short Notes" && (
                           <Badge className="ml-2 bg-green-500 hover:bg-green-600">New</Badge>
+                        )}
+                        {item.name === "Important Dates" && (
+                          <Badge className="ml-2 bg-yellow-500 hover:bg-yellow-600">New</Badge>
                         )}
                       </Link>
                     ))}

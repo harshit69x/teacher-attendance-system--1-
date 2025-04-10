@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from 'next/server';
 import mongoose from "mongoose"
 
 // Connect to MongoDB
@@ -35,22 +35,24 @@ const teacherScheduleSchema = new mongoose.Schema(
 // Get the model (or create it if it doesn't exist)
 const TeacherSchedule = mongoose.models.TeacherSchedule || mongoose.model("TeacherSchedule", teacherScheduleSchema)
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await connectToDatabase()
+    await connectToDatabase();
 
-    const teacherId = Number(params.id)
+    // Await params before accessing its properties
+    const { id } = await params;
+    const teacherId = Number(id);
 
     // Find schedule by teacher ID
-    const schedule = await TeacherSchedule.findOne({ Id: teacherId })
+    const schedule = await TeacherSchedule.findOne({ Id: teacherId });
 
     if (!schedule) {
-      return NextResponse.json({ message: "No schedule found for this teacher" }, { status: 404 })
+      return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
     }
 
-    return NextResponse.json(schedule)
+    return NextResponse.json(schedule);
   } catch (error) {
-    console.error("Error fetching schedule:", error)
-    return NextResponse.json({ message: "Error fetching teacher schedule" }, { status: 500 })
+    console.error('Error fetching schedule:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
