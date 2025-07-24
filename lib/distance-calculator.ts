@@ -21,7 +21,14 @@ export function calculateDistance(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distanceInMeters = earthRadius * c;
 
-  const isWithinRange = distanceInMeters <= 500; // 500 meters range
+  const isWithinRange = distanceInMeters <= 550; // Allow a buffer of 50 meters
+
+  console.log("User Latitude:", userLat);
+  console.log("User Longitude:", userLng);
+  console.log("College Latitude:", collegeLat);
+  console.log("College Longitude:", collegeLng);
+  console.log("Calculated Distance (meters):", distanceInMeters);
+  console.log("Is Within Range:", isWithinRange);
 
   return { distanceInMeters, isWithinRange };
 }

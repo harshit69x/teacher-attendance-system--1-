@@ -55,7 +55,7 @@ export default function Dashboard() {
     // Get teacher data from localStorage
     const teacherData = localStorage.getItem("teacherData")
     if (!teacherData) {
-      router.push("/")
+      router.push("/dashboard")
       return
     }
 

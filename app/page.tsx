@@ -35,8 +35,9 @@ export default function LoginPage() {
 
       if (data.success) {
         // Store teacher data in localStorage
-        localStorage.setItem("teacherData", JSON.stringify(data.teacher))
+        console.log("Login successful:", data.teacher)
         router.push("/dashboard")
+        localStorage.setItem("teacherData", JSON.stringify(data.teacher))
       } else {
         setError(data.message || "Invalid credentials")
       }
